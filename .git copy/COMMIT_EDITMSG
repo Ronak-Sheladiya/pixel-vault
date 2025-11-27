@@ -1,9 +1,0 @@
-Improve photo display and file management features
-
-Replace emoji placeholders with icons, add data-testid attributes for improved testing, and ensure the upload handler works reliably across all scenarios.
-
-Replit-Commit-Author: Agent
-Replit-Commit-Session-Id: 0fa0cf6c-d5f6-4772-8719-57ea2ed93c5a
-Replit-Commit-Checkpoint-Type: full_checkpoint
-Replit-Commit-Event-Id: 96afc5d9-0b97-4cd7-af95-0c6519556b37
-Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/d869943b-2229-4135-815e-9810a7d11a37/0fa0cf6c-d5f6-4772-8719-57ea2ed93c5a/hT6cHKz
