@@ -60,7 +60,6 @@ export function ShareDialog({ folderId, folderName, open, onOpenChange }: ShareD
         title: "Error",
         description: error.response?.data?.message || "Failed to share folder",
     });
-},
     });
 
 // Remove member mutation
