@@ -1,4 +1,4 @@
-name: Deploy CloudVault to EB
+name: Deploy to Elastic Beanstalk
 
 on:
   push:
@@ -7,13 +7,62 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
     
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build application
+      run: npm run build
+      env:
+        NODE_ENV: production
+    
     - name: Create deployment package
       run: |
-        zip -r deploy.zip package.json server.js .ebextensions/
+        # Create deployment directory
+        mkdir deploy
+        
+        # Copy built application
+        cp -r dist/ deploy/
+        cp package.json deploy/
+        
+        # Create simple server entry point for EB
+        cat > deploy/app.js << 'EOF'
+        import('./dist/index.js').catch(err => {
+          console.error('Failed to start server:', err);
+          process.exit(1);
+        });
+        EOF
+        
+        # Create package.json for deployment
+        cat > deploy/package.json << 'EOF'
+        {
+          "name": "pixel-vault-deploy",
+          "version": "1.0.0",
+          "type": "module",
+          "main": "app.js",
+          "scripts": {
+            "start": "node app.js"
+          },
+          "engines": {
+            "node": "20.x"
+          }
+        }
+        EOF
+        
+        # Create deployment zip
+        cd deploy
+        zip -r ../deploy.zip .
+        cd ..
     
     - name: Deploy to Elastic Beanstalk
       uses: einaregilsson/beanstalk-deploy@v21
@@ -23,6 +72,6 @@ jobs:
         application_name: cloudvault
         environment_name: Cloudvault-env
         region: us-east-1
-        version_label: cloudvault-${{ github.sha }}
+        version_label: v${{ github.sha }}
         deployment_package: deploy.zip
         use_existing_version_if_available: false

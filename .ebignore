@@ -1,24 +1,32 @@
-# Elastic Beanstalk ignore file
-.git/
-.gitignore
+# Development files
+client/
+server/
+shared/
+.local/
+zip/
+
+# Config files
+*.config.js
+*.config.ts
+tsconfig.json
+vite.config.ts
+tailwind.config.ts
+components.json
+
+# Documentation
 *.md
 !README.md
+
+# Environment files
 .env
 .env.*
-uploads/
-.local/
+
+# Logs and temp files
 *.log
 .DS_Store
 .vscode/
 .idea/
-client/
-server/
-shared/
-zip/
+
+# Archives
 *.zip
 *.tar.gz
-tsconfig.json
-vite.config.ts
-tailwind.config.ts
-postcss.config.js
-components.json
