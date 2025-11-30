@@ -25,6 +25,10 @@ jobs:
       env:
         NODE_ENV: production
     
+    - name: Create deployment package
+      run: |
+        zip -r deploy.zip package.json Procfile app.js server.js dist/ .ebextensions/ -x "*.git*" "node_modules/*"
+    
     - name: Deploy to EB
       uses: einaregilsson/beanstalk-deploy@v21
       with:
@@ -33,10 +37,6 @@ jobs:
         application_name: pixel-vault
         environment_name: pixelvault-env
         region: us-east-1
-        version_label: ${{ github.sha }}
+        version_label: pixelvault-${{ github.sha }}
         deployment_package: deploy.zip
         use_existing_version_if_available: false
-    
-    - name: Create deployment package
-      run: |
-        zip -r deploy.zip . -x "*.git*" "node_modules/*" "client/*" "server/*" "*.md" "*.zip"
