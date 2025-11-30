@@ -1,4 +1,4 @@
-name: Deploy to AWS Elastic Beanstalk
+name: Deploy to Elastic Beanstalk
 
 on:
   push:
@@ -8,35 +8,59 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
     steps:
-      - uses: actions/checkout@v3
-      
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-      
-      - name: Install dependencies
-        run: npm install
-      
-      - name: Build application
+
+      - name: Install dependencies (root)
+        run: npm ci
+
+      - name: Build (client + server)
         run: npm run build
-      
-      - name: Create deployment package
+
+      - name: Prepare deploy folder
         run: |
-          mkdir -p deploy
-          cp -r dist deploy/
-          cp -r .ebignore deploy/ 2>/dev/null || true
-          cd deploy && zip -r ../pixelvault-${{ github.sha }}.zip . && cd ..
-      
+          rm -rf deploy || true
+          mkdir deploy
+          # Copy package.json and lockfile so EB can install deps
+          cp package.json deploy/
+          if [ -f package-lock.json ]; then cp package-lock.json deploy/; fi
+          # Copy Procfile and .ebextensions if present
+          cp -r Procfile .ebextensions deploy/ 2>/dev/null || true
+          # Copy server bundle (dist) into deploy/ (adjust path if different)
+          cp -r dist deploy/server-dist || true
+          # Copy client build (Vite default -> dist) into deploy/client-dist
+          # If your client build lives at client/dist, change path accordingly:
+          if [ -d client/dist ]; then cp -r client/dist deploy/client-dist; elif [ -d dist ]; then cp -r dist deploy/client-dist; fi
+          # If you have any other files required at runtime, copy them
+          # e.g. keys, views, public folder, etc (do NOT copy .env)
+          # Create zip
+          cd deploy
+          zip -r ../pixelvault-${{ github.sha }}.zip . -x "*.git*" "node_modules/*"
+          cd ..
+
+      - name: Show bundle size
+        run: ls -lh pixelvault-${{ github.sha }}.zip
+
       - name: Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          application_name: piccsync
-          environment_name: Piccsync-env-1
+          application_name: ${{ secrets.EB_APPLICATION_NAME }}
+          environment_name: ${{ secrets.EB_ENVIRONMENT_NAME }}
+          region: ${{ secrets.AWS_REGION }}
           version_label: pixelvault-${{ github.sha }}
-          region: us-east-1
           deployment_package: pixelvault-${{ github.sha }}.zip
           use_existing_version_if_available: false
