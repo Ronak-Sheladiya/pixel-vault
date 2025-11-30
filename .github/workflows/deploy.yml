@@ -5,111 +5,69 @@ on:
     branches:
       - main
 
-permissions:
-  contents: read
-  id-token: write
-
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
 
-    env:
-      EB_APP: ${{ secrets.EB_APPLICATION_NAME }}
-      EB_ENV: ${{ secrets.EB_ENVIRONMENT_NAME }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - name: Checkout repository (full)
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Setup Node.js
+      - name: Setup Node.js 18
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      - name: Install root deps
+      - name: Install dependencies (root) (ci)
         run: npm ci
 
       - name: Build (client + server)
         run: npm run build
 
-      - name: Prepare deploy package
+      - name: Prepare deploy folder
         run: |
-          set -e
           rm -rf deploy || true
           mkdir deploy
 
-          # Create runtime package.json with type: module (to avoid ESM/CJS mismatches)
-          node -e "
-          const fs=require('fs');
-          const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
-          const runtime={
-            name: pkg.name || 'pixelvault-app',
-            version: pkg.version || '1.0.0',
-            private: true,
-            type: 'module',
-            engines: pkg.engines || { node: '18.x' },
-            dependencies: pkg.dependencies || {},
-            scripts: { start: pkg.scripts && pkg.scripts.start ? pkg.scripts.start : 'node dist/index.js' }
-          };
-          fs.writeFileSync('deploy/package.json', JSON.stringify(runtime,null,2));
-          console.log('Wrote deploy/package.json');
-          "
+          # Copy package metadata so EB can install runtime deps (if needed)
+          cp package.json deploy/
+          if [ -f package-lock.json ]; then cp package-lock.json deploy/; fi
 
-          # Copy Procfile if you have one
-          cp Procfile deploy/ 2>/dev/null || true
+          # Copy Procfile and any .ebextensions (if present)
+          cp -r Procfile .ebextensions deploy/ 2>/dev/null || true
 
-          # Ensure server bundle located at dist/index.js
-          if [ -f dist/index.js ]; then
-            mkdir -p deploy/dist
-            cp dist/index.js deploy/dist/index.js
-            cp -r dist/*.map deploy/dist/ 2>/dev/null || true
-          elif [ -f server/dist/index.js ]; then
-            mkdir -p deploy/dist
-            cp server/dist/index.js deploy/dist/index.js
-            cp -r server/dist/* deploy/dist/ 2>/dev/null || true
-          else
-            echo "ERROR: dist/index.js not found after build. Aborting." >&2
-            ls -la
-            exit 1
+          # Copy compiled server bundle into deploy/
+          # adjust if your server dist path differs
+          if [ -d dist ]; then
+            cp -r dist deploy/
+          elif [ -d server/dist ]; then
+            cp -r server/dist deploy/dist
           fi
 
-          # Copy client build (prefer client/dist)
+          # Copy client build into deploy/public if you want EB to serve static files
+          # If your client build is at client/dist, change the path below
           if [ -d client/dist ]; then
-            mkdir -p deploy/client
-            cp -r client/dist/* deploy/client/
-          elif [ -d dist ] && [ -f dist/index.html ]; then
-            mkdir -p deploy/client
-            rsync -av --exclude 'index.js' dist/ deploy/client/
+            mkdir -p deploy/public
+            cp -r client/dist/* deploy/public/
+          elif [ -d dist/public ]; then
+            mkdir -p deploy/public
+            cp -r dist/public/* deploy/public/
           fi
 
-          # Copy public/views if present
-          cp -r public deploy/ 2>/dev/null || true
-          cp -r views deploy/ 2>/dev/null || true
-
-          # Build zip
+          # Exclude node_modules and git artifacts from zip
           cd deploy
-          zip -r ../pixelvault-${{ github.sha }}-${{ github.run_id }}.zip . -x "*.git*" "node_modules/*"
+          zip -r ../pixelvault-${{ github.sha }}.zip . -x "*.git*" "node_modules/*"
           cd ..
-          ls -lh pixelvault-${{ github.sha }}-${{ github.run_id }}.zip
 
-      - name: List zip contents (debug)
-        run: unzip -l pixelvault-${{ github.sha }}-${{ github.run_id }}.zip | sed -n '1,200p'
-
-      - name: Configure AWS CLI
-        uses: aws-actions/configure-aws-credentials@v3
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Show bundle size
+        run: ls -lh pixelvault-${{ github.sha }}.zip || true
 
       - name: Deploy to Elastic Beanstalk
-        id: eb-deploy
         uses: einaregilsson/beanstalk-deploy@v21
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -117,59 +75,6 @@ jobs:
           application_name: ${{ secrets.EB_APPLICATION_NAME }}
           environment_name: ${{ secrets.EB_ENVIRONMENT_NAME }}
           region: ${{ secrets.AWS_REGION }}
-          version_label: pixelvault-${{ github.sha }}-${{ github.run_id }}
-          deployment_package: pixelvault-${{ github.sha }}-${{ github.run_id }}.zip
+          version_label: pixelvault-${{ github.sha }}
+          deployment_package: pixelvault-${{ github.sha }}.zip
           use_existing_version_if_available: true
-        continue-on-error: true
-
-      - name: Request EB logs (always run)
-        if: always()
-        run: |
-          set -e
-          # Request environment logs (bundle)
-          echo "Requesting environment logs..."
-          aws elasticbeanstalk request-environment-info --environment-name "${EB_ENV}" --info-type tail
-          echo "Waiting 15s for logs to be prepared..."
-          sleep 15
-          echo "Retrieving environment logs..."
-          aws elasticbeanstalk retrieve-environment-info --environment-name "${EB_ENV}" --info-type tail > env-info.json || true
-          cat env-info.json || true
-          jq -r '.EnvironmentInfo[]?.Message' env-info.json || true
-
-      - name: Download recent EB instance logs (if any)
-        if: always()
-        run: |
-          set -e
-          # Attempt to download logs (this will save to workspace and print)
-          echo "Listing S3 bucket objects for Beanstalk logs (may be empty)"
-          aws s3 ls "elasticbeanstalk-${{ github.account_id || 'unknown' }}-{{ secrets.AWS_REGION }}" --no-sign-request || true
-
-          # Try a fallback: fetch last 200 lines of web.stdout.log via EB logs (best effort)
-          echo "Requesting last 100 lines logs via AWS CLI (attempt)"
-          aws elasticbeanstalk request-environment-info --environment-name "${EB_ENV}" --info-type tail || true
-          sleep 12
-          aws elasticbeanstalk retrieve-environment-info --environment-name "${EB_ENV}" --info-type tail > env-info.json || true
-          cat env-info.json || true
-          # If env-info.json contains S3 links, attempt to curl them
-          for url in $(jq -r '.EnvironmentInfo[]?.Message' env-info.json | grep -Eo 'https?:\/\/[^"]+' || true); do
-            echo "---- DOWNLOAD $url ----"
-            curl -sSfL "$url" -o artifact.tgz || true
-            if [ -f artifact.tgz ]; then
-              mkdir -p logs_from_eb
-              tar -xzf artifact.tgz -C logs_from_eb || true
-              echo "---- FILES inside artifact ----"
-              ls -la logs_from_eb || true
-              echo "---- web.stdout.log last 200 lines ----"
-              tail -n 200 logs_from_eb/var/log/web.stdout.log || true
-              echo "---- eb-engine.log last 200 lines ----"
-              tail -n 200 logs_from_eb/var/log/eb-engine.log || true
-            fi
-          done
-
-      - name: Final status
-        if: always()
-        run: |
-          echo "EB deploy step exit code: ${{ steps.eb-deploy.outcome }}"
-          echo "If deploy failed, paste the logs printed above (web.stdout.log and eb-engine.log) here."
-          echo "Done."
-          
