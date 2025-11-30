@@ -1,15 +1,15 @@
-name: Deploy to EB
+name: Deploy
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - run: zip deploy.zip package.json server.js
+    - run: zip deploy.zip package.json app.js
     - uses: einaregilsson/beanstalk-deploy@v21
       with:
         aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
