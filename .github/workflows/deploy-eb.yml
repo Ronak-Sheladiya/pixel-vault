@@ -1,4 +1,4 @@
-name: Deploy to Elastic Beanstalk
+name: Deploy to EB
 
 on:
   push:
@@ -7,21 +7,15 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
     steps:
     - uses: actions/checkout@v3
-    
-    - name: Create deployment package
-      run: |
-        zip -r deploy.zip app.js package.json Procfile
-    
-    - name: Deploy to EB
-      uses: einaregilsson/beanstalk-deploy@v21
+    - run: zip deploy.zip package.json server.js
+    - uses: einaregilsson/beanstalk-deploy@v21
       with:
         aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         application_name: pixelvault-app
         environment_name: pixelvault-env
         region: us-east-1
-        version_label: v${{ github.sha }}
+        version_label: ${{ github.sha }}
         deployment_package: deploy.zip

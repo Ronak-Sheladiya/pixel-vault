@@ -1,4 +1,11 @@
-import('./dist/index.js').catch(err => {
-  console.error('Failed to start application:', err);
-  process.exit(1);
+const express = require('express');
+const app = express();
+const port = process.env.PORT || 8080;
+
+app.get('/', (req, res) => {
+  res.send('Hello from PixelVault!');
+});
+
+app.listen(port, () => {
+  console.log(`App running on port ${port}`);
 });
