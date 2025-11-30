@@ -13,7 +13,7 @@ jobs:
     
     - name: Create deployment package
       run: |
-        zip -r deploy.zip app.js package.json Procfile dist/
+        zip -r deploy.zip app.js package.json Procfile
     
     - name: Deploy to EB
       uses: einaregilsson/beanstalk-deploy@v21
