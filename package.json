@@ -2,41 +2,18 @@
   "name": "pixelvault",
   "version": "1.0.0",
   "type": "module",
-  "main": "app.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node app.js"
+    "start": "node server.js",
+    "build": "echo 'Using pre-built files'"
   },
   "engines": {
     "node": "18.x"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.450.0",
-    "@aws-sdk/lib-storage": "^3.450.0",
-    "@aws-sdk/s3-request-presigner": "^3.940.0",
-    "@neondatabase/serverless": "^0.10.4",
-    "bcryptjs": "^2.4.3",
-    "connect-pg-simple": "^10.0.0",
-    "cookie-parser": "^1.4.6",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "drizzle-orm": "^0.39.1",
-    "drizzle-zod": "^0.7.0",
     "express": "^4.21.2",
-    "express-rate-limit": "^7.5.1",
-    "express-session": "^1.18.1",
-    "express-validator": "^7.0.1",
-    "helmet": "^7.2.0",
-    "jsonwebtoken": "^9.0.2",
-    "memorystore": "^1.6.7",
-    "mongoose": "^8.0.0",
-    "multer": "^2.0.2",
-    "nodemailer": "^6.9.7",
-    "passport": "^0.7.0",
-    "passport-local": "^1.0.0",
-    "sharp": "^0.34.5",
-    "uuid": "^9.0.1",
-    "ws": "^8.18.0",
-    "zod": "^3.24.2",
-    "zod-validation-error": "^3.4.0"
+    "cors": "^2.8.5",
+    "cookie-parser": "^1.4.6",
+    "helmet": "^7.2.0"
   }
 }
