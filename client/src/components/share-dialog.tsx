@@ -56,31 +56,78 @@ export function ShareDialog({ folderId, folderName, open, onOpenChange }: ShareD
             const response = await api.get(`/share/folder/${folderId}/members`);
             return response.data;
         },
-        variant: "destructive",
-        title: "Error",
-        description: error.response?.data?.message || "Failed to share folder",
     });
-    },
 
-// Remove member mutation
-const removeMemberMutation = useMutation({
-    mutationFn: async (shareId: string) => {
-        await api.delete(`/share/${shareId}`);
-    },
-    onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["/api/share/folder", folderId, "members"] });
-        toast({
-            title: "Member removed",
-            description: "Access has been revoked",
-        });
-    },
-    onError: (error: any) => {
-        toast({
-            variant: "destructive",
-            title: "Error",
-            description: error.response?.data?.message || "Failed to remove member",
+    // Share folder mutation
+    const shareMutation = useMutation({
+        mutationFn: async () => {
+            const response = await api.post(`/share/folder/${folderId}`, {
+                email,
+                permission,
+            });
+            return response.data;
         },
-});
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/share/folder", folderId, "members"] });
+            setEmail("");
+            toast({
+                title: "Invitation sent",
+                description: "User has been invited to the folder",
+            });
+        },
+        onError: (error: any) => {
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: error.response?.data?.message || "Failed to share folder",
+            });
+        },
+    });
+
+    // Update permission mutation
+    const updatePermissionMutation = useMutation({
+        mutationFn: async ({ shareId, newPermission }: { shareId: string; newPermission: string }) => {
+            const response = await api.patch(`/share/${shareId}`, {
+                permission: newPermission,
+            });
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/share/folder", folderId, "members"] });
+            toast({
+                title: "Permission updated",
+                description: "Member permission has been updated",
+            });
+        },
+        onError: (error: any) => {
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: error.response?.data?.message || "Failed to update permission",
+            });
+        },
+    });
+
+    // Remove member mutation
+    const removeMemberMutation = useMutation({
+        mutationFn: async (shareId: string) => {
+            await api.delete(`/share/${shareId}`);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/share/folder", folderId, "members"] });
+            toast({
+                title: "Member removed",
+                description: "Access has been revoked",
+            });
+        },
+        onError: (error: any) => {
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: error.response?.data?.message || "Failed to remove member",
+            });
+        },
+    });
 
 // Generate public link mutation (placeholder logic for now as UI needs to support it)
 // For this implementation, we'll focus on email sharing first as per requirements.
