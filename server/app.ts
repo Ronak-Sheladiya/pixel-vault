@@ -46,8 +46,7 @@ app.use(helmet({
 
 // CORS
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || `http://localhost:${process.env.PORT || 3000}`,
-  credentials: true,
+ origin: process.env.CORS_ORIGIN || (process.env.NODE_ENV === 'production' ? 'https://piccsync.work' : `http://localhost:${process.env.PORT || 3000}`),  credentials: true,
 }));
 
 // Rate limiting (disabled in development for testing)

@@ -2,10 +2,10 @@ import { Link } from "wouter";
 import { Upload, Zap, Shield, Cloud, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import heroImage from "@assets/generated_images/futuristic_cloud_storage_hero.png";
-import syncIcon from "@assets/generated_images/auto_sync_feature_icon.png";
-import securityIcon from "@assets/generated_images/security_feature_icon.png";
-import speedIcon from "@assets/generated_images/fast_upload_feature_icon.png";
+// import heroImage from "@assets/generated_images/futuristic_cloud_storage_hero.png";
+// import syncIcon from "@assets/generated_images/auto_sync_feature_icon.png";
+// import securityIcon from "@assets/generated_images/security_feature_icon.png";
+// import speedIcon from "@assets/generated_images/fast_upload_feature_icon.png";
 
 export default function Home() {
   return (
