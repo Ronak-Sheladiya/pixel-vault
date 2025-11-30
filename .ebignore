@@ -1,11 +1,8 @@
 # Elastic Beanstalk ignore file
-# Don't upload these to EB
-
-node_modules/
 .git/
 .gitignore
 *.md
-!DEPLOYMENT.md
+!README.md
 .env
 .env.*
 uploads/
@@ -14,3 +11,14 @@ uploads/
 .DS_Store
 .vscode/
 .idea/
+client/
+server/
+shared/
+zip/
+*.zip
+*.tar.gz
+tsconfig.json
+vite.config.ts
+tailwind.config.ts
+postcss.config.js
+components.json
