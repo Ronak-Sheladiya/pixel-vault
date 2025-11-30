@@ -1,4 +1,4 @@
-name: Deploy
+name: Deploy CloudVault to EB
 
 on:
   push:
@@ -8,14 +8,21 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - run: zip deploy.zip package.json app.js
-    - uses: einaregilsson/beanstalk-deploy@v21
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Create deployment package
+      run: |
+        zip -r deploy.zip package.json server.js .ebextensions/
+    
+    - name: Deploy to Elastic Beanstalk
+      uses: einaregilsson/beanstalk-deploy@v21
       with:
         aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         application_name: cloudvault
         environment_name: Cloudvault-env
         region: us-east-1
-        version_label: ${{ github.sha }}
+        version_label: cloudvault-${{ github.sha }}
         deployment_package: deploy.zip
+        use_existing_version_if_available: false

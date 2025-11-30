@@ -1,14 +1,15 @@
 {
-  "name": "nodejs24-app",
+  "name": "cloudvault-app",
   "version": "1.0.0",
-  "type": "module",
+  "description": "CloudVault Application",
+  "main": "server.js",
   "scripts": {
-    "start": "node app.js"
-  },
-  "dependencies": {
-    "express": "^4.19.2"
+    "start": "node server.js"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": "20.x"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
   }
 }
