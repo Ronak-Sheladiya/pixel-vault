@@ -4,7 +4,8 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "build": "echo 'Using pre-built files'"
   },
   "engines": {
     "node": "20.x"
