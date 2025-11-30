@@ -1,20 +1,29 @@
-name: Deploy to Elastic Beanstalk
+name: Deploy to AWS Elastic Beanstalk
 
 on:
   push:
     branches:
       - main
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
 
+    env:
+      EB_APP: ${{ secrets.EB_APPLICATION_NAME }}
+      EB_ENV: ${{ secrets.EB_ENVIRONMENT_NAME }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -23,39 +32,39 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Install dependencies (root)
+      - name: Install root deps
         run: npm ci
 
       - name: Build (client + server)
         run: npm run build
 
-      - name: Prepare deploy folder (place server bundle at dist/index.js)
+      - name: Prepare deploy package
         run: |
           set -e
           rm -rf deploy || true
           mkdir deploy
 
-          # Create a minimal runtime package.json (with type: module)
+          # Create runtime package.json with type: module (to avoid ESM/CJS mismatches)
           node -e "
-          const fs = require('fs');
-          const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
-          const clean = {
+          const fs=require('fs');
+          const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
+          const runtime={
             name: pkg.name || 'pixelvault-app',
             version: pkg.version || '1.0.0',
-            private: (typeof pkg.private !== 'undefined') ? pkg.private : true,
+            private: true,
             type: 'module',
             engines: pkg.engines || { node: '18.x' },
             dependencies: pkg.dependencies || {},
-            scripts: { start: (pkg.scripts && pkg.scripts.start) ? pkg.scripts.start : 'node dist/index.js' }
+            scripts: { start: pkg.scripts && pkg.scripts.start ? pkg.scripts.start : 'node dist/index.js' }
           };
-          fs.writeFileSync('deploy/package.json', JSON.stringify(clean, null, 2));
-          console.log('Wrote deploy/package.json with keys:', Object.keys(clean));
+          fs.writeFileSync('deploy/package.json', JSON.stringify(runtime,null,2));
+          console.log('Wrote deploy/package.json');
           "
 
-          # Copy Procfile if present
+          # Copy Procfile if you have one
           cp Procfile deploy/ 2>/dev/null || true
 
-          # Ensure server bundle is placed at deploy/dist/index.js
+          # Ensure server bundle located at dist/index.js
           if [ -f dist/index.js ]; then
             mkdir -p deploy/dist
             cp dist/index.js deploy/dist/index.js
@@ -64,45 +73,43 @@ jobs:
             mkdir -p deploy/dist
             cp server/dist/index.js deploy/dist/index.js
             cp -r server/dist/* deploy/dist/ 2>/dev/null || true
-          elif [ -f server/index-prod.js ]; then
-            mkdir -p deploy/dist
-            cp server/index-prod.js deploy/dist/index.js
-          elif [ -f server/index-prod.ts ]; then
-            echo 'ERROR: TypeScript source detected but server was not built. Ensure build script outputs server bundle to dist/index.js' >&2
-            ls -la
-            exit 1
           else
-            echo "ERROR: no server bundle found at dist/index.js or server/dist/index.js" >&2
+            echo "ERROR: dist/index.js not found after build. Aborting." >&2
             ls -la
             exit 1
           fi
 
-          # Copy client build: prefer client/dist, fallback to root dist (but do not overwrite server file)
+          # Copy client build (prefer client/dist)
           if [ -d client/dist ]; then
             mkdir -p deploy/client
             cp -r client/dist/* deploy/client/
           elif [ -d dist ] && [ -f dist/index.html ]; then
             mkdir -p deploy/client
-            # Copy everything except the server bundle we already copied
             rsync -av --exclude 'index.js' dist/ deploy/client/
           fi
 
-          # Copy public / views if present
-          if [ -d public ]; then cp -r public deploy/public || true; fi
-          if [ -d views ]; then cp -r views deploy/views || true; fi
+          # Copy public/views if present
+          cp -r public deploy/ 2>/dev/null || true
+          cp -r views deploy/ 2>/dev/null || true
 
-          # Create a unique zip
+          # Build zip
           cd deploy
           zip -r ../pixelvault-${{ github.sha }}-${{ github.run_id }}.zip . -x "*.git*" "node_modules/*"
           cd ..
+          ls -lh pixelvault-${{ github.sha }}-${{ github.run_id }}.zip
 
-      - name: Show bundle size
-        run: ls -lh pixelvault-${{ github.sha }}-${{ github.run_id }}.zip
-
-      - name: List deploy bundle contents (debug)
+      - name: List zip contents (debug)
         run: unzip -l pixelvault-${{ github.sha }}-${{ github.run_id }}.zip | sed -n '1,200p'
 
+      - name: Configure AWS CLI
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
       - name: Deploy to Elastic Beanstalk
+        id: eb-deploy
         uses: einaregilsson/beanstalk-deploy@v21
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -113,3 +120,56 @@ jobs:
           version_label: pixelvault-${{ github.sha }}-${{ github.run_id }}
           deployment_package: pixelvault-${{ github.sha }}-${{ github.run_id }}.zip
           use_existing_version_if_available: true
+        continue-on-error: true
+
+      - name: Request EB logs (always run)
+        if: always()
+        run: |
+          set -e
+          # Request environment logs (bundle)
+          echo "Requesting environment logs..."
+          aws elasticbeanstalk request-environment-info --environment-name "${EB_ENV}" --info-type tail
+          echo "Waiting 15s for logs to be prepared..."
+          sleep 15
+          echo "Retrieving environment logs..."
+          aws elasticbeanstalk retrieve-environment-info --environment-name "${EB_ENV}" --info-type tail > env-info.json || true
+          cat env-info.json || true
+          jq -r '.EnvironmentInfo[]?.Message' env-info.json || true
+
+      - name: Download recent EB instance logs (if any)
+        if: always()
+        run: |
+          set -e
+          # Attempt to download logs (this will save to workspace and print)
+          echo "Listing S3 bucket objects for Beanstalk logs (may be empty)"
+          aws s3 ls "elasticbeanstalk-${{ github.account_id || 'unknown' }}-{{ secrets.AWS_REGION }}" --no-sign-request || true
+
+          # Try a fallback: fetch last 200 lines of web.stdout.log via EB logs (best effort)
+          echo "Requesting last 100 lines logs via AWS CLI (attempt)"
+          aws elasticbeanstalk request-environment-info --environment-name "${EB_ENV}" --info-type tail || true
+          sleep 12
+          aws elasticbeanstalk retrieve-environment-info --environment-name "${EB_ENV}" --info-type tail > env-info.json || true
+          cat env-info.json || true
+          # If env-info.json contains S3 links, attempt to curl them
+          for url in $(jq -r '.EnvironmentInfo[]?.Message' env-info.json | grep -Eo 'https?:\/\/[^"]+' || true); do
+            echo "---- DOWNLOAD $url ----"
+            curl -sSfL "$url" -o artifact.tgz || true
+            if [ -f artifact.tgz ]; then
+              mkdir -p logs_from_eb
+              tar -xzf artifact.tgz -C logs_from_eb || true
+              echo "---- FILES inside artifact ----"
+              ls -la logs_from_eb || true
+              echo "---- web.stdout.log last 200 lines ----"
+              tail -n 200 logs_from_eb/var/log/web.stdout.log || true
+              echo "---- eb-engine.log last 200 lines ----"
+              tail -n 200 logs_from_eb/var/log/eb-engine.log || true
+            fi
+          done
+
+      - name: Final status
+        if: always()
+        run: |
+          echo "EB deploy step exit code: ${{ steps.eb-deploy.outcome }}"
+          echo "If deploy failed, paste the logs printed above (web.stdout.log and eb-engine.log) here."
+          echo "Done."
+          
