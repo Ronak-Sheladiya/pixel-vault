@@ -43,15 +43,13 @@ jobs:
           # Copy client build (Vite default -> dist) into deploy/client-dist
           # If your client build lives at client/dist, change path accordingly:
           if [ -d client/dist ]; then cp -r client/dist deploy/client-dist; elif [ -d dist ]; then cp -r dist deploy/client-dist; fi
-          # If you have any other files required at runtime, copy them
-          # e.g. keys, views, public folder, etc (do NOT copy .env)
           # Create zip
           cd deploy
-          zip -r ../pixelvault-${{ github.sha }}.zip . -x "*.git*" "node_modules/*"
+          zip -r ../pixelvault-${{ github.sha }}-${{ github.run_id }}.zip . -x "*.git*" "node_modules/*"
           cd ..
 
       - name: Show bundle size
-        run: ls -lh pixelvault-${{ github.sha }}.zip
+        run: ls -lh pixelvault-${{ github.sha }}-${{ github.run_id }}.zip
 
       - name: Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
@@ -61,6 +59,6 @@ jobs:
           application_name: ${{ secrets.EB_APPLICATION_NAME }}
           environment_name: ${{ secrets.EB_ENVIRONMENT_NAME }}
           region: ${{ secrets.AWS_REGION }}
-          version_label: pixelvault-${{ github.sha }}
-          deployment_package: pixelvault-${{ github.sha }}.zip
-          use_existing_version_if_available: false
+          version_label: pixelvault-${{ github.sha }}-${{ github.run_id }}
+          deployment_package: pixelvault-${{ github.sha }}-${{ github.run_id }}.zip
+          use_existing_version_if_available: true
