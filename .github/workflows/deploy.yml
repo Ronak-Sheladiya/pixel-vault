@@ -29,22 +29,21 @@ jobs:
       - name: Build (client + server)
         run: npm run build
 
-      - name: Prepare deploy folder
+      - name: Prepare deploy folder (place server bundle at dist/index.js)
         run: |
+          set -e
           rm -rf deploy || true
           mkdir deploy
 
-          # Create a clean package.json for runtime (remove build hooks)
+          # Create a minimal runtime package.json (with type: module)
           node -e "
           const fs = require('fs');
-          const path = require('path');
-          const pkgPath = path.resolve('package.json');
-          if (!fs.existsSync(pkgPath)) { console.error('ERROR: root package.json not found'); process.exit(1); }
-          const pkg = JSON.parse(fs.readFileSync(pkgPath,'utf8'));
+          const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
           const clean = {
             name: pkg.name || 'pixelvault-app',
             version: pkg.version || '1.0.0',
             private: (typeof pkg.private !== 'undefined') ? pkg.private : true,
+            type: 'module',
             engines: pkg.engines || { node: '18.x' },
             dependencies: pkg.dependencies || {},
             scripts: { start: (pkg.scripts && pkg.scripts.start) ? pkg.scripts.start : 'node dist/index.js' }
@@ -53,21 +52,46 @@ jobs:
           console.log('Wrote deploy/package.json with keys:', Object.keys(clean));
           "
 
-          # Copy Procfile and .ebextensions if present
-          cp -r Procfile .ebextensions deploy/ 2>/dev/null || true
+          # Copy Procfile if present
+          cp Procfile deploy/ 2>/dev/null || true
 
-          # Copy server bundle (dist) into deploy/server-dist (adjust if different)
-          if [ -d dist ]; then cp -r dist deploy/server-dist || true; fi
-          if [ -d server/dist ]; then cp -r server/dist deploy/server-dist || true; fi
+          # Ensure server bundle is placed at deploy/dist/index.js
+          if [ -f dist/index.js ]; then
+            mkdir -p deploy/dist
+            cp dist/index.js deploy/dist/index.js
+            cp -r dist/*.map deploy/dist/ 2>/dev/null || true
+          elif [ -f server/dist/index.js ]; then
+            mkdir -p deploy/dist
+            cp server/dist/index.js deploy/dist/index.js
+            cp -r server/dist/* deploy/dist/ 2>/dev/null || true
+          elif [ -f server/index-prod.js ]; then
+            mkdir -p deploy/dist
+            cp server/index-prod.js deploy/dist/index.js
+          elif [ -f server/index-prod.ts ]; then
+            echo 'ERROR: TypeScript source detected but server was not built. Ensure build script outputs server bundle to dist/index.js' >&2
+            ls -la
+            exit 1
+          else
+            echo "ERROR: no server bundle found at dist/index.js or server/dist/index.js" >&2
+            ls -la
+            exit 1
+          fi
 
-          # Copy client build (Vite default -> client/dist, or root dist) into deploy/client-dist
-          if [ -d client/dist ]; then cp -r client/dist deploy/client-dist; elif [ -d dist ]; then cp -r dist deploy/client-dist; fi
+          # Copy client build: prefer client/dist, fallback to root dist (but do not overwrite server file)
+          if [ -d client/dist ]; then
+            mkdir -p deploy/client
+            cp -r client/dist/* deploy/client/
+          elif [ -d dist ] && [ -f dist/index.html ]; then
+            mkdir -p deploy/client
+            # Copy everything except the server bundle we already copied
+            rsync -av --exclude 'index.js' dist/ deploy/client/
+          fi
 
-          # Copy any runtime public/static folders if present
+          # Copy public / views if present
           if [ -d public ]; then cp -r public deploy/public || true; fi
           if [ -d views ]; then cp -r views deploy/views || true; fi
 
-          # Create zip with unique name
+          # Create a unique zip
           cd deploy
           zip -r ../pixelvault-${{ github.sha }}-${{ github.run_id }}.zip . -x "*.git*" "node_modules/*"
           cd ..
@@ -75,7 +99,7 @@ jobs:
       - name: Show bundle size
         run: ls -lh pixelvault-${{ github.sha }}-${{ github.run_id }}.zip
 
-      - name: List deploy bundle contents
+      - name: List deploy bundle contents (debug)
         run: unzip -l pixelvault-${{ github.sha }}-${{ github.run_id }}.zip | sed -n '1,200p'
 
       - name: Deploy to Elastic Beanstalk
