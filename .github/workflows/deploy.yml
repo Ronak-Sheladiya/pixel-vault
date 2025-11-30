@@ -24,7 +24,7 @@ jobs:
           node-version: '18'
 
       - name: Install dependencies (root) (ci)
-        run: npm ci
+        run: npm install
 
       - name: Build (client + server)
         run: npm run build
