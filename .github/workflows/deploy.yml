@@ -33,23 +33,50 @@ jobs:
         run: |
           rm -rf deploy || true
           mkdir deploy
-          # Copy package.json and lockfile so EB can install deps
-          cp package.json deploy/
-          if [ -f package-lock.json ]; then cp package-lock.json deploy/; fi
+
+          # Create a clean package.json for runtime (remove build hooks)
+          node -e "
+          const fs = require('fs');
+          const path = require('path');
+          const pkgPath = path.resolve('package.json');
+          if (!fs.existsSync(pkgPath)) { console.error('ERROR: root package.json not found'); process.exit(1); }
+          const pkg = JSON.parse(fs.readFileSync(pkgPath,'utf8'));
+          const clean = {
+            name: pkg.name || 'pixelvault-app',
+            version: pkg.version || '1.0.0',
+            private: (typeof pkg.private !== 'undefined') ? pkg.private : true,
+            engines: pkg.engines || { node: '18.x' },
+            dependencies: pkg.dependencies || {},
+            scripts: { start: (pkg.scripts && pkg.scripts.start) ? pkg.scripts.start : 'node dist/index.js' }
+          };
+          fs.writeFileSync('deploy/package.json', JSON.stringify(clean, null, 2));
+          console.log('Wrote deploy/package.json with keys:', Object.keys(clean));
+          "
+
           # Copy Procfile and .ebextensions if present
           cp -r Procfile .ebextensions deploy/ 2>/dev/null || true
-          # Copy server bundle (dist) into deploy/ (adjust path if different)
-          cp -r dist deploy/server-dist || true
-          # Copy client build (Vite default -> dist) into deploy/client-dist
-          # If your client build lives at client/dist, change path accordingly:
+
+          # Copy server bundle (dist) into deploy/server-dist (adjust if different)
+          if [ -d dist ]; then cp -r dist deploy/server-dist || true; fi
+          if [ -d server/dist ]; then cp -r server/dist deploy/server-dist || true; fi
+
+          # Copy client build (Vite default -> client/dist, or root dist) into deploy/client-dist
           if [ -d client/dist ]; then cp -r client/dist deploy/client-dist; elif [ -d dist ]; then cp -r dist deploy/client-dist; fi
-          # Create zip
+
+          # Copy any runtime public/static folders if present
+          if [ -d public ]; then cp -r public deploy/public || true; fi
+          if [ -d views ]; then cp -r views deploy/views || true; fi
+
+          # Create zip with unique name
           cd deploy
           zip -r ../pixelvault-${{ github.sha }}-${{ github.run_id }}.zip . -x "*.git*" "node_modules/*"
           cd ..
 
       - name: Show bundle size
         run: ls -lh pixelvault-${{ github.sha }}-${{ github.run_id }}.zip
+
+      - name: List deploy bundle contents
+        run: unzip -l pixelvault-${{ github.sha }}-${{ github.run_id }}.zip | sed -n '1,200p'
 
       - name: Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
