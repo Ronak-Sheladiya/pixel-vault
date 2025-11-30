@@ -8,19 +8,40 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v3
-    
-    - name: Create deployment package
-      run: zip -r deploy.zip package.json dist/
-    
-    - name: Deploy to Elastic Beanstalk
-      uses: einaregilsson/beanstalk-deploy@v21
-      with:
-        aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        application_name: cloudvault
-        environment_name: Cloudvault-env
-        region: us-east-1
-        version_label: ${{ github.sha }}
-        deployment_package: deploy.zip
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci --only=production
+
+      - name: Install build dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build || echo "No build script found, skipping build"
+
+      - name: Create deployment package
+        run: |
+          mkdir -p deploy_package
+          cp package.json deploy_package/
+          cp package-lock.json deploy_package/ 2>/dev/null || true
+          cp -r dist deploy_package/ 2>/dev/null || true
+          cp -r server deploy_package/ 2>/dev/null || true
+          cp -r .ebextensions deploy_package/ 2>/dev/null || true
+          cd deploy_package && zip -r ../deploy.zip . -q
+
+      - name: Deploy to Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v21
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          application_name: pixelvault
+          environment_name: Pixelvault-env
+          region: eu-north-1
+          version_label: ${{ github.sha }}
+          deployment_package: deploy.zip
