@@ -39,12 +39,22 @@ export const app = express();
 connectDatabase();
 
 // Trust proxy for Railway deployment (fixes redirect loops)
-app.set('trust proxy', 1);
+app.enable('trust proxy');
+
+// Debug middleware to log protocol
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production') {
+    console.log(`[DEBUG] ${req.method} ${req.url} | Proto: ${req.protocol} | Secure: ${req.secure} | X-Fwd-Proto: ${req.headers['x-forwarded-proto']}`);
+  }
+  next();
+});
 
 // Security middleware
 // Disable CSP in development to allow Vite's inline scripts
+// Disable HSTS to prevent redirect loops during debugging
 app.use(helmet({
   contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+  hsts: false,
 }));
 
 // CORS
