@@ -1,3 +1,54 @@
+var __defProp = Object.defineProperty;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+
+// server/models/GlobalStorage.ts
+var GlobalStorage_exports = {};
+__export(GlobalStorage_exports, {
+  GlobalStorage: () => GlobalStorage,
+  getGlobalStorage: () => getGlobalStorage
+});
+import mongoose4 from "mongoose";
+async function getGlobalStorage() {
+  let storage2 = await GlobalStorage.findOne();
+  if (!storage2) {
+    storage2 = new GlobalStorage({
+      totalUsed: 0,
+      totalLimit: 9 * 1024 * 1024 * 1024
+    });
+    await storage2.save();
+  }
+  return storage2;
+}
+var globalStorageSchema, GlobalStorage;
+var init_GlobalStorage = __esm({
+  "server/models/GlobalStorage.ts"() {
+    "use strict";
+    globalStorageSchema = new mongoose4.Schema({
+      totalUsed: {
+        type: Number,
+        default: 0
+      },
+      totalLimit: {
+        type: Number,
+        default: 9 * 1024 * 1024 * 1024
+        // 9GB total for all users
+      },
+      lastUpdated: {
+        type: Date,
+        default: Date.now
+      }
+    });
+    GlobalStorage = mongoose4.model("GlobalStorage", globalStorageSchema);
+  }
+});
+
 // server/index-prod.ts
 import express2 from "express";
 import path3 from "node:path";
@@ -931,6 +982,20 @@ var resetPassword = async (req, res) => {
     res.status(500).json({ message: "Failed to reset password" });
   }
 };
+var getGlobalStorageStats = async (req, res) => {
+  try {
+    const { getGlobalStorage: getGlobalStorage2 } = await Promise.resolve().then(() => (init_GlobalStorage(), GlobalStorage_exports));
+    const globalStorage = await getGlobalStorage2();
+    res.json({
+      totalUsed: globalStorage.totalUsed,
+      totalLimit: globalStorage.totalLimit,
+      lastUpdated: globalStorage.lastUpdated
+    });
+  } catch (error) {
+    console.error("Get global storage error:", error);
+    res.status(500).json({ message: "Failed to get storage info" });
+  }
+};
 
 // server/middleware/auth.ts
 var authenticate = async (req, res, next) => {
@@ -958,6 +1023,7 @@ router.post("/reset-password/:token", resetPassword);
 router.post("/logout", authenticate, logout);
 router.post("/refresh-token", refreshToken);
 router.get("/me", authenticate, getCurrentUser);
+router.get("/storage", authenticate, getGlobalStorageStats);
 var auth_default = router;
 
 // server/routes/files.ts
@@ -965,8 +1031,8 @@ import { Router as Router2 } from "express";
 import multer2 from "multer";
 
 // server/models/File.ts
-import mongoose4 from "mongoose";
-var fileSchema = new mongoose4.Schema({
+import mongoose5 from "mongoose";
+var fileSchema = new mongoose5.Schema({
   name: {
     type: String,
     required: true
@@ -997,12 +1063,12 @@ var fileSchema = new mongoose4.Schema({
     required: true
   },
   folder: {
-    type: mongoose4.Schema.Types.ObjectId,
+    type: mongoose5.Schema.Types.ObjectId,
     ref: "Folder",
     default: null
   },
   owner: {
-    type: mongoose4.Schema.Types.ObjectId,
+    type: mongoose5.Schema.Types.ObjectId,
     ref: "User",
     required: true
   },
@@ -1020,7 +1086,10 @@ var fileSchema = new mongoose4.Schema({
 fileSchema.index({ owner: 1, folder: 1 });
 fileSchema.index({ folder: 1 });
 fileSchema.index({ name: "text" });
-var File = mongoose4.model("File", fileSchema);
+var File = mongoose5.model("File", fileSchema);
+
+// server/controllers/fileController.ts
+init_GlobalStorage();
 
 // server/services/storageService.ts
 import { GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
@@ -1131,11 +1200,12 @@ var uploadFiles = async (req, res) => {
     for (const file of req.files) {
       totalSize += file.size;
     }
-    if (user.storageUsed + totalSize > user.storageLimit) {
+    const globalStorage = await getGlobalStorage();
+    if (globalStorage.totalUsed + totalSize > globalStorage.totalLimit) {
       res.status(413).json({
-        message: "Storage full! Cannot upload files. You have reached your 9GB storage limit.",
-        storageUsed: user.storageUsed,
-        storageLimit: user.storageLimit,
+        message: "Global storage full! Cannot upload files. The system has reached its 9GB total storage limit.",
+        globalStorageUsed: globalStorage.totalUsed,
+        globalStorageLimit: globalStorage.totalLimit,
         requiredSpace: totalSize
       });
       return;
@@ -1183,6 +1253,10 @@ var uploadFiles = async (req, res) => {
       return;
     }
     await user.save();
+    const updatedGlobalStorage = await getGlobalStorage();
+    updatedGlobalStorage.totalUsed += totalSize;
+    updatedGlobalStorage.lastUpdated = /* @__PURE__ */ new Date();
+    await updatedGlobalStorage.save();
     res.status(201).json({
       message: `Successfully uploaded ${uploadedFiles.length} file(s)`,
       files: uploadedFiles
@@ -1264,6 +1338,10 @@ var deleteFile = async (req, res) => {
       user.storageUsed = Math.max(0, user.storageUsed - file.size);
       await user.save();
     }
+    const globalStorage = await getGlobalStorage();
+    globalStorage.totalUsed = Math.max(0, globalStorage.totalUsed - file.size);
+    globalStorage.lastUpdated = /* @__PURE__ */ new Date();
+    await globalStorage.save();
     await File.deleteOne({ _id: file._id });
     res.json({ message: "File deleted successfully" });
   } catch (error) {
@@ -1345,8 +1423,8 @@ var files_default = router2;
 import { Router as Router3 } from "express";
 
 // server/models/Folder.ts
-import mongoose5 from "mongoose";
-var folderSchema = new mongoose5.Schema({
+import mongoose6 from "mongoose";
+var folderSchema = new mongoose6.Schema({
   name: {
     type: String,
     required: true,
@@ -1354,12 +1432,12 @@ var folderSchema = new mongoose5.Schema({
   },
   description: String,
   owner: {
-    type: mongoose5.Schema.Types.ObjectId,
+    type: mongoose6.Schema.Types.ObjectId,
     ref: "User",
     required: true
   },
   parent: {
-    type: mongoose5.Schema.Types.ObjectId,
+    type: mongoose6.Schema.Types.ObjectId,
     ref: "Folder",
     default: null
   },
@@ -1383,7 +1461,7 @@ folderSchema.pre("save", function(next) {
 });
 folderSchema.index({ owner: 1, parent: 1 });
 folderSchema.index({ parent: 1 });
-var Folder = mongoose5.model("Folder", folderSchema);
+var Folder = mongoose6.model("Folder", folderSchema);
 
 // server/controllers/folderController.ts
 var createFolder = async (req, res) => {
@@ -1793,15 +1871,15 @@ var share_default = router4;
 import { Router as Router5 } from "express";
 
 // server/models/Comment.ts
-import mongoose6 from "mongoose";
-var commentSchema = new mongoose6.Schema({
+import mongoose7 from "mongoose";
+var commentSchema = new mongoose7.Schema({
   file: {
-    type: mongoose6.Schema.Types.ObjectId,
+    type: mongoose7.Schema.Types.ObjectId,
     ref: "File",
     required: true
   },
   user: {
-    type: mongoose6.Schema.Types.ObjectId,
+    type: mongoose7.Schema.Types.ObjectId,
     ref: "User",
     required: true
   },
@@ -1810,11 +1888,11 @@ var commentSchema = new mongoose6.Schema({
     required: true
   },
   mentions: [{
-    type: mongoose6.Schema.Types.ObjectId,
+    type: mongoose7.Schema.Types.ObjectId,
     ref: "User"
   }],
   parent: {
-    type: mongoose6.Schema.Types.ObjectId,
+    type: mongoose7.Schema.Types.ObjectId,
     ref: "Comment",
     default: null
   },
@@ -1832,7 +1910,7 @@ commentSchema.pre("save", function(next) {
   next();
 });
 commentSchema.index({ file: 1, parent: 1 });
-var Comment = mongoose6.model("Comment", commentSchema);
+var Comment = mongoose7.model("Comment", commentSchema);
 
 // server/controllers/commentController.ts
 var addComment = async (req, res) => {

@@ -90,7 +90,7 @@ export function PhotoModal({ photo, photos, onClose, onNavigate }: PhotoModalPro
 
   const handleDownload = async () => {
     try {
-      const url = photo.r2Url || `https://storage-project.c56a0b5deb7568b708edf3a06756423d.r2.cloudflarestorage.com/${photo.filename}`;
+      const url = photo.r2Url;
       const response = await fetch(url);
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
@@ -176,13 +176,13 @@ export function PhotoModal({ photo, photos, onClose, onNavigate }: PhotoModalPro
           <div className="max-w-full max-h-full flex items-center justify-center w-full h-full">
             {photo.mimeType?.startsWith("image/") ? (
               <img
-                src={photo.r2Url || `https://storage-project.c56a0b5deb7568b708edf3a06756423d.r2.cloudflarestorage.com/${photo.filename}`}
+                src={photo.r2Url}
                 alt={photo.originalName}
                 className="max-w-full max-h-full object-contain"
               />
             ) : photo.mimeType?.startsWith("video/") ? (
               <video
-                src={photo.r2Url || `https://storage-project.c56a0b5deb7568b708edf3a06756423d.r2.cloudflarestorage.com/${photo.filename}`}
+                src={photo.r2Url}
                 controls
                 className="max-w-full max-h-full"
                 autoPlay

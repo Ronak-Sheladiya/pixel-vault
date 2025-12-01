@@ -136,6 +136,7 @@ export const getSignedR2Url = async (key: string): Promise<string> => {
         return await getSignedUrl(r2Client, command, { expiresIn: 3600 }); // 1 hour
     } catch (error) {
         console.error('R2 sign error:', error);
+        console.error('Failed key:', key);
         return '';
     }
 };
