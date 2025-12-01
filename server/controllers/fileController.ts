@@ -190,6 +190,10 @@ export const getFile = async (req: Request, res: Response): Promise<void> => {
 // Serve File Content (Proxy)
 export const serveFileContent = async (req: Request, res: Response): Promise<void> => {
     try {
+        console.log(`[DEBUG] serveFileContent called for ID: ${req.params.id}`);
+        console.log(`[DEBUG] Auth status: ${req.user ? 'Authenticated' : 'Not Authenticated'}`);
+        console.log(`[DEBUG] Headers:`, JSON.stringify(req.headers));
+
         // Note: We might want to allow public access for shared links in the future,
         // but for now, let's require auth or implement a shared token check.
         // However, since the frontend uses this for the dashboard, auth is required.

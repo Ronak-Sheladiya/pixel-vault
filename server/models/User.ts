@@ -20,7 +20,6 @@ const userSchema = new mongoose.Schema<IUser>({
   email: {
     type: String,
     required: true,
-    unique: true,
     lowercase: true,
     trim: true,
   },
@@ -69,7 +68,8 @@ userSchema.methods.comparePassword = async function (candidatePassword: string):
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Create indexes removed as unique: true already creates one
+// Create indexes
+userSchema.index({ email: 1 }, { unique: true });
 
 
 export const User = mongoose.model<IUser>('User', userSchema);
