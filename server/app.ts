@@ -36,7 +36,7 @@ export function log(message: string, source = "express") {
 export const app = express();
 
 // Trust proxy for Railway deployment (fixes redirect loops and rate limiting)
-app.enable('trust proxy');
+app.set('trust proxy', 1);
 
 // Connect to MongoDB
 connectDatabase();

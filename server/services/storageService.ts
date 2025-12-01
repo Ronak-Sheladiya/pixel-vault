@@ -133,7 +133,9 @@ export const getSignedR2Url = async (key: string): Promise<string> => {
             Bucket: R2_CONFIG.bucketName,
             Key: key,
         });
-        return await getSignedUrl(r2Client, command, { expiresIn: 3600 }); // 1 hour
+        const url = await getSignedUrl(r2Client, command, { expiresIn: 3600 }); // 1 hour
+        console.log(`[DEBUG] Generated R2 URL for key ${key}:`, url);
+        return url;
     } catch (error) {
         console.error('R2 sign error:', error);
         console.error('Failed key:', key);
