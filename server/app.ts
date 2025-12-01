@@ -38,6 +38,9 @@ export const app = express();
 // Connect to MongoDB
 connectDatabase();
 
+// Trust proxy for Railway deployment (fixes redirect loops)
+app.set('trust proxy', 1);
+
 // Security middleware
 // Disable CSP in development to allow Vite's inline scripts
 app.use(helmet({
@@ -46,7 +49,7 @@ app.use(helmet({
 
 // CORS
 app.use(cors({
- origin: process.env.CORS_ORIGIN || (process.env.NODE_ENV === 'production' ? 'https://piccsync.work' : `http://localhost:${process.env.PORT || 3000}`),  credentials: true,
+  origin: process.env.CORS_ORIGIN || (process.env.NODE_ENV === 'production' ? 'https://piccsync.work' : `http://localhost:${process.env.PORT || 3000}`), credentials: true,
 }));
 
 // Rate limiting (disabled in development for testing)
