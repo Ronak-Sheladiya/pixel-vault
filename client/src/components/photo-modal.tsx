@@ -90,7 +90,7 @@ export function PhotoModal({ photo, photos, onClose, onNavigate }: PhotoModalPro
 
   const handleDownload = async () => {
     try {
-      const url = photo.r2Url;
+      const url = `/api/files/${photo._id}/content`;
       const response = await fetch(url);
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
@@ -176,13 +176,13 @@ export function PhotoModal({ photo, photos, onClose, onNavigate }: PhotoModalPro
           <div className="max-w-full max-h-full flex items-center justify-center w-full h-full">
             {photo.mimeType?.startsWith("image/") ? (
               <img
-                src={photo.r2Url}
+                src={`/api/files/${photo._id}/content`}
                 alt={photo.originalName}
                 className="max-w-full max-h-full object-contain"
               />
             ) : photo.mimeType?.startsWith("video/") ? (
               <video
-                src={photo.r2Url}
+                src={`/api/files/${photo._id}/content`}
                 controls
                 className="max-w-full max-h-full"
                 autoPlay
@@ -227,10 +227,10 @@ export function PhotoModal({ photo, photos, onClose, onNavigate }: PhotoModalPro
                 navigator.share({
                   title: photo.originalName,
                   text: `Check out this file: ${photo.originalName}`,
-                  url: photo.r2Url || window.location.href,
+                  url: window.location.origin + `/api/files/${photo._id}/content`,
                 }).catch(() => {
                   // Fallback: copy link to clipboard
-                  navigator.clipboard.writeText(photo.r2Url || window.location.href);
+                  navigator.clipboard.writeText(window.location.origin + `/api/files/${photo._id}/content`);
                   toast({
                     title: "Link copied",
                     description: "File link copied to clipboard",
@@ -238,7 +238,7 @@ export function PhotoModal({ photo, photos, onClose, onNavigate }: PhotoModalPro
                 });
               } else {
                 // Fallback: copy link to clipboard
-                navigator.clipboard.writeText(photo.r2Url || window.location.href);
+                navigator.clipboard.writeText(window.location.origin + `/api/files/${photo._id}/content`);
                 toast({
                   title: "Link copied",
                   description: "File link copied to clipboard",

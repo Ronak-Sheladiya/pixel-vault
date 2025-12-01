@@ -53,7 +53,7 @@ export function PhotoGrid({ photos, onPhotoClick }: PhotoGridProps) {
     e.stopPropagation();
     // Create a temporary anchor element to trigger download
     const link = document.createElement('a');
-    link.href = photo.r2Url;
+    link.href = `/api/files/${photo._id}/content`;
     link.download = photo.originalName;
     link.target = '_blank';
     document.body.appendChild(link);
@@ -92,7 +92,7 @@ export function PhotoGrid({ photos, onPhotoClick }: PhotoGridProps) {
               {photo.r2Url || photo.filename ? (
                 photo.mimeType?.startsWith('video/') ? (
                   <video
-                    src={photo.r2Url}
+                    src={`/api/files/${photo._id}/content`}
                     className="absolute inset-0 w-full h-full object-contain bg-black"
                     preload="metadata"
                     onError={(e) => {
@@ -102,7 +102,7 @@ export function PhotoGrid({ photos, onPhotoClick }: PhotoGridProps) {
                   />
                 ) : (
                   <img
-                    src={photo.r2Url}
+                    src={`/api/files/${photo._id}/content`}
                     alt={photo.originalName}
                     className="absolute inset-0 w-full h-full object-contain"
                     loading="lazy"
