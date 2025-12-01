@@ -59,7 +59,6 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
 
 // server/config/database.ts
 import mongoose from "mongoose";
@@ -386,7 +385,6 @@ var userSchema = new mongoose2.Schema({
   email: {
     type: String,
     required: true,
-    unique: true,
     lowercase: true,
     trim: true
   },
@@ -430,7 +428,7 @@ userSchema.pre("save", async function(next) {
 userSchema.methods.comparePassword = async function(candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
-userSchema.index({ email: 1 });
+userSchema.index({ email: 1 }, { unique: true });
 var User = mongoose2.model("User", userSchema);
 
 // server/models/Share.ts
@@ -870,7 +868,8 @@ var login = async (req, res) => {
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "lax" : "strict",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      // 'none' required for cross-site cookies (images)
       maxAge: rememberMe ? 30 * 24 * 60 * 60 * 1e3 : void 0
       // 30 days if remember me
     };
@@ -917,7 +916,7 @@ var refreshToken = async (req, res) => {
     res.cookie("accessToken", newAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "lax" : "strict"
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
     });
     res.json({ message: "Token refreshed successfully" });
   } catch (error) {
@@ -1164,21 +1163,23 @@ var deleteFromR2 = async (key) => {
     throw new Error("Failed to delete file from storage");
   }
 };
-var getSignedR2Url = async (key) => {
+var getFileStream = async (key) => {
   try {
     const command = new GetObjectCommand({
       Bucket: R2_CONFIG.bucketName,
       Key: key
     });
-    return await getSignedUrl(r2Client, command, { expiresIn: 3600 });
+    const response = await r2Client.send(command);
+    return response;
   } catch (error) {
-    console.error("R2 sign error:", error);
-    return "";
+    console.error("R2 get stream error:", error);
+    throw new Error("Failed to retrieve file stream from storage");
   }
 };
 
 // server/controllers/fileController.ts
 import sharp2 from "sharp";
+import { Readable } from "stream";
 var uploadFiles = async (req, res) => {
   try {
     if (!req.user) {
@@ -1281,14 +1282,12 @@ var getFiles = async (req, res) => {
     console.log("[DEBUG] Query:", JSON.stringify(query));
     const files = await File.find(query).sort({ uploadedAt: -1 });
     console.log(`[DEBUG] Found ${files.length} files`);
-    const filesWithSignedUrls = await Promise.all(files.map(async (file) => {
+    const filesWithProxyUrls = files.map((file) => {
       const fileObj = file.toObject();
-      if (file.r2Key) {
-        fileObj.r2Url = await getSignedR2Url(file.r2Key);
-      }
+      fileObj.r2Url = `/api/files/${file._id}/content`;
       return fileObj;
-    }));
-    res.json({ files: filesWithSignedUrls });
+    });
+    res.json({ files: filesWithProxyUrls });
   } catch (error) {
     console.error("Get files error:", error);
     res.status(500).json({ message: "Failed to fetch files" });
@@ -1309,13 +1308,42 @@ var getFile = async (req, res) => {
       return;
     }
     const fileObj = file.toObject();
-    if (file.r2Key) {
-      fileObj.r2Url = await getSignedR2Url(file.r2Key);
-    }
+    fileObj.r2Url = `/api/files/${file._id}/content`;
     res.json({ file: fileObj });
   } catch (error) {
     console.error("Get file error:", error);
     res.status(500).json({ message: "Failed to fetch file" });
+  }
+};
+var serveFileContent = async (req, res) => {
+  try {
+    console.log(`[DEBUG] serveFileContent called for ID: ${req.params.id}`);
+    console.log(`[DEBUG] Auth status: ${req.user ? "Authenticated" : "Not Authenticated"}`);
+    console.log(`[DEBUG] Headers:`, JSON.stringify(req.headers));
+    const file = await File.findOne({
+      _id: req.params.id
+      // owner: req.user.userId // Disabled owner check for debugging
+    });
+    if (!file) {
+      res.status(404).json({ message: "File not found" });
+      return;
+    }
+    if (!file.r2Key) {
+      res.status(404).json({ message: "File content not found" });
+      return;
+    }
+    const { Body, ContentType, ContentLength } = await getFileStream(file.r2Key);
+    if (ContentType) res.setHeader("Content-Type", ContentType);
+    if (ContentLength) res.setHeader("Content-Length", ContentLength);
+    res.setHeader("Cache-Control", "public, max-age=31536000");
+    if (Body instanceof Readable) {
+      Body.pipe(res);
+    } else {
+      res.send(Body);
+    }
+  } catch (error) {
+    console.error("Serve file content error:", error);
+    res.status(500).json({ message: "Failed to serve file content" });
   }
 };
 var deleteFile = async (req, res) => {
@@ -1414,6 +1442,7 @@ router2.use(authenticate);
 router2.post("/upload", upload2.array("files", 10), uploadFiles);
 router2.get("/", getFiles);
 router2.get("/:id", getFile);
+router2.get("/:id/content", serveFileContent);
 router2.delete("/:id", deleteFile);
 router2.patch("/:id/rename", renameFile);
 router2.patch("/:id/move", moveFile);
@@ -2048,23 +2077,16 @@ function log(message, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 var app = express();
+app.set("trust proxy", 1);
 connectDatabase();
 app.use(helmet({
-  contentSecurityPolicy: process.env.NODE_ENV === "production" ? void 0 : false
+  contentSecurityPolicy: process.env.NODE_ENV === "production" ? void 0 : false,
+  hsts: false
 }));
 app.use(cors({
   origin: process.env.CORS_ORIGIN || (process.env.NODE_ENV === "production" ? "https://piccsync.work" : `http://localhost:${process.env.PORT || 3e3}`),
   credentials: true
 }));
-if (process.env.NODE_ENV === "production") {
-  const limiter = rateLimit({
-    windowMs: 15 * 60 * 1e3,
-    // 15 minutes
-    max: 100,
-    message: "Too many requests from this IP, please try again later."
-  });
-  app.use("/api/", limiter);
-}
 app.use(cookieParser());
 app.use(express.json({
   verify: (req, _res, buf) => {

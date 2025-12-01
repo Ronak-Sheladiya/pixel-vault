@@ -142,16 +142,16 @@ export const getFiles = async (req: Request, res: Response): Promise<void> => {
         const files = await File.find(query).sort({ uploadedAt: -1 });
         console.log(`[DEBUG] Found ${files.length} files`);
 
-        // Use proxy URL instead of signed URL
-        const filesWithProxyUrls = files.map((file) => {
+        // Generate signed URLs for each file
+        const filesWithSignedUrls = await Promise.all(files.map(async (file) => {
             const fileObj = file.toObject();
-            // Point to our own backend proxy
-            // Note: We use the file ID to fetch the content
-            fileObj.r2Url = `/api/files/${file._id}/content`;
+            if (file.r2Key) {
+                fileObj.r2Url = await getSignedR2Url(file.r2Key);
+            }
             return fileObj;
-        });
+        }));
 
-        res.json({ files: filesWithProxyUrls });
+        res.json({ files: filesWithSignedUrls });
     } catch (error) {
         console.error('Get files error:', error);
         res.status(500).json({ message: 'Failed to fetch files' });
@@ -177,8 +177,9 @@ export const getFile = async (req: Request, res: Response): Promise<void> => {
         }
 
         const fileObj = file.toObject();
-        // Use proxy URL
-        fileObj.r2Url = `/api/files/${file._id}/content`;
+        if (file.r2Key) {
+            fileObj.r2Url = await getSignedR2Url(file.r2Key);
+        }
 
         res.json({ file: fileObj });
     } catch (error) {
