@@ -143,6 +143,21 @@ export const getSignedR2Url = async (key: string): Promise<string> => {
     }
 };
 
+export const getFileStream = async (key: string): Promise<any> => {
+    try {
+        const command = new GetObjectCommand({
+            Bucket: R2_CONFIG.bucketName,
+            Key: key,
+        });
+
+        const response = await r2Client.send(command);
+        return response;
+    } catch (error) {
+        console.error('R2 get stream error:', error);
+        throw new Error('Failed to retrieve file stream from storage');
+    }
+};
+
 export const getFromR2 = async (key: string): Promise<any> => {
     try {
         const command = new GetObjectCommand({

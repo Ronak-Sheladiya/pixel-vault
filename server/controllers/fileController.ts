@@ -2,8 +2,9 @@ import { Request, Response } from 'express';
 import { File } from '../models/File';
 import { User } from '../models/User';
 import { getGlobalStorage } from '../models/GlobalStorage';
-import { uploadToR2, deleteFromR2, getSignedR2Url } from '../services/storageService';
+import { uploadToR2, deleteFromR2, getSignedR2Url, getFileStream } from '../services/storageService';
 import sharp from 'sharp';
+import { Readable } from 'stream';
 
 // Upload Files
 export const uploadFiles = async (req: Request, res: Response): Promise<void> => {
@@ -141,16 +142,16 @@ export const getFiles = async (req: Request, res: Response): Promise<void> => {
         const files = await File.find(query).sort({ uploadedAt: -1 });
         console.log(`[DEBUG] Found ${files.length} files`);
 
-        // Generate signed URLs for each file
-        const filesWithSignedUrls = await Promise.all(files.map(async (file) => {
+        // Use proxy URL instead of signed URL
+        const filesWithProxyUrls = files.map((file) => {
             const fileObj = file.toObject();
-            if (file.r2Key) {
-                fileObj.r2Url = await getSignedR2Url(file.r2Key);
-            }
+            // Point to our own backend proxy
+            // Note: We use the file ID to fetch the content
+            fileObj.r2Url = `/api/files/${file._id}/content`;
             return fileObj;
-        }));
+        });
 
-        res.json({ files: filesWithSignedUrls });
+        res.json({ files: filesWithProxyUrls });
     } catch (error) {
         console.error('Get files error:', error);
         res.status(500).json({ message: 'Failed to fetch files' });
@@ -176,14 +177,80 @@ export const getFile = async (req: Request, res: Response): Promise<void> => {
         }
 
         const fileObj = file.toObject();
-        if (file.r2Key) {
-            fileObj.r2Url = await getSignedR2Url(file.r2Key);
-        }
+        // Use proxy URL
+        fileObj.r2Url = `/api/files/${file._id}/content`;
 
         res.json({ file: fileObj });
     } catch (error) {
         console.error('Get file error:', error);
         res.status(500).json({ message: 'Failed to fetch file' });
+    }
+};
+
+// Serve File Content (Proxy)
+export const serveFileContent = async (req: Request, res: Response): Promise<void> => {
+    try {
+        // Note: We might want to allow public access for shared links in the future,
+        // but for now, let's require auth or implement a shared token check.
+        // However, since the frontend uses this for the dashboard, auth is required.
+        // If the user is just viewing the image in the dashboard, the cookie should be sent.
+
+        // For simplicity and to fix the immediate issue, we'll check auth if present,
+        // but we might need to be lenient if the browser doesn't send cookies for <img> tags 
+        // in some cross-site scenarios (though here it's same-site).
+
+        // Let's enforce auth for now.
+        if (!req.user) {
+            // If no user, check if it's a public share (TODO). 
+            // For now, if no auth, return 401.
+            // BUT: <img> tags might not send Authorization header if it's a bearer token.
+            // If using cookies, it should work.
+            // If using Bearer token in headers, <img> src won't send it.
+            // The current auth middleware checks cookies.
+
+            // If the middleware didn't find a user, we can't serve private files.
+            res.status(401).json({ message: 'Authentication required' });
+            return;
+        }
+
+        const file = await File.findOne({
+            _id: req.params.id,
+            // We should check ownership OR if the file is shared.
+            // For now, check ownership.
+            owner: req.user.userId,
+        });
+
+        if (!file) {
+            res.status(404).json({ message: 'File not found' });
+            return;
+        }
+
+        if (!file.r2Key) {
+            res.status(404).json({ message: 'File content not found' });
+            return;
+        }
+
+        // Get stream from R2
+        const { Body, ContentType, ContentLength } = await getFileStream(file.r2Key);
+
+        // Set headers
+        if (ContentType) res.setHeader('Content-Type', ContentType);
+        if (ContentLength) res.setHeader('Content-Length', ContentLength);
+
+        // Cache control for better performance
+        res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
+
+        // Pipe stream to response
+        if (Body instanceof Readable) {
+            Body.pipe(res);
+        } else {
+            // Fallback if not a stream (e.g. Buffer/Blob/String)
+            res.send(Body);
+        }
+
+    } catch (error) {
+        console.error('Serve file content error:', error);
+        res.status(500).json({ message: 'Failed to serve file content' });
     }
 };
 

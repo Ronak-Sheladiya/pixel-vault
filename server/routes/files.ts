@@ -7,6 +7,7 @@ import {
     deleteFile,
     renameFile,
     moveFile,
+    serveFileContent,
 } from '../controllers/fileController';
 import { authenticate } from '../middleware/auth';
 
@@ -34,6 +35,7 @@ router.use(authenticate);
 router.post('/upload', upload.array('files', 10), uploadFiles);
 router.get('/', getFiles);
 router.get('/:id', getFile);
+router.get('/:id/content', serveFileContent);
 router.delete('/:id', deleteFile);
 router.patch('/:id/rename', renameFile);
 router.patch('/:id/move', moveFile);
