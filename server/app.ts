@@ -58,7 +58,7 @@ app.use(cors({
 if (process.env.NODE_ENV === 'production') {
   const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100,
+    max: 1000, // Increased for photo gallery
     message: 'Too many requests from this IP, please try again later.',
     validate: { trustProxy: false }, // We handle trust proxy manually
   });
