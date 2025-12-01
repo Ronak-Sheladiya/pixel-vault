@@ -197,48 +197,48 @@ export const serveFileContent = async (req: Request, res: Response): Promise<voi
         // Note: We might want to allow public access for shared links in the future,
         // but for now, let's require auth or implement a shared token check.
         // If the middleware didn't find a user, we can't serve private files.
-        res.status(401).json({ message: 'Authentication required' });
-        return;
+        // if (!req.user) {
+        //      res.status(401).json({ message: 'Authentication required' });
+        //      return;
+        // }
+
+        const file = await File.findOne({
+            _id: req.params.id,
+            // owner: req.user.userId // Disabled owner check for debugging
+        });
+
+        if (!file) {
+            res.status(404).json({ message: 'File not found' });
+            return;
+        }
+
+        if (!file.r2Key) {
+            res.status(404).json({ message: 'File content not found' });
+            return;
+        }
+
+        // Get stream from R2
+        const { Body, ContentType, ContentLength } = await getFileStream(file.r2Key);
+
+        // Set headers
+        if (ContentType) res.setHeader('Content-Type', ContentType);
+        if (ContentLength) res.setHeader('Content-Length', ContentLength);
+
+        // Cache control for better performance
+        res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
+
+        // Pipe stream to response
+        if (Body instanceof Readable) {
+            Body.pipe(res);
+        } else {
+            // Fallback if not a stream (e.g. Buffer/Blob/String)
+            res.send(Body);
+        }
+
+    } catch (error) {
+        console.error('Serve file content error:', error);
+        res.status(500).json({ message: 'Failed to serve file content' });
     }
-        */
-
-    const file = await File.findOne({
-        _id: req.params.id,
-        // owner: req.user.userId // Disabled owner check for debugging
-    });
-
-    if (!file) {
-        res.status(404).json({ message: 'File not found' });
-        return;
-    }
-
-    if (!file.r2Key) {
-        res.status(404).json({ message: 'File content not found' });
-        return;
-    }
-
-    // Get stream from R2
-    const { Body, ContentType, ContentLength } = await getFileStream(file.r2Key);
-
-    // Set headers
-    if (ContentType) res.setHeader('Content-Type', ContentType);
-    if (ContentLength) res.setHeader('Content-Length', ContentLength);
-
-    // Cache control for better performance
-    res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
-
-    // Pipe stream to response
-    if (Body instanceof Readable) {
-        Body.pipe(res);
-    } else {
-        // Fallback if not a stream (e.g. Buffer/Blob/String)
-        res.send(Body);
-    }
-
-} catch (error) {
-    console.error('Serve file content error:', error);
-    res.status(500).json({ message: 'Failed to serve file content' });
-}
 };
 
 // Delete File
