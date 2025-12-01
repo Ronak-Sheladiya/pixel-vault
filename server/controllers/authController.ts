@@ -147,7 +147,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         const cookieOptions = {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
- sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'strict',            maxAge: rememberMe ? 30 * 24 * 60 * 60 * 1000 : undefined, // 30 days if remember me
+            sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'strict', maxAge: rememberMe ? 30 * 24 * 60 * 60 * 1000 : undefined, // 30 days if remember me
         };
 
         res.cookie('accessToken', accessToken, cookieOptions);
@@ -203,7 +203,8 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
         res.cookie('accessToken', newAccessToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
- sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'strict',        });
+            sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'strict',
+        });
 
         res.json({ message: 'Token refreshed successfully' });
     } catch (error) {
@@ -286,5 +287,22 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
     } catch (error) {
         console.error('Reset password error:', error);
         res.status(500).json({ message: 'Failed to reset password' });
+    }
+};
+
+// Get Global Storage
+export const getGlobalStorageStats = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { getGlobalStorage } = await import('../models/GlobalStorage');
+        const globalStorage = await getGlobalStorage();
+
+        res.json({
+            totalUsed: globalStorage.totalUsed,
+            totalLimit: globalStorage.totalLimit,
+            lastUpdated: globalStorage.lastUpdated,
+        });
+    } catch (error) {
+        console.error('Get global storage error:', error);
+        res.status(500).json({ message: 'Failed to get storage info' });
     }
 };

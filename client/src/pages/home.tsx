@@ -39,14 +39,9 @@ export default function Home() {
       </header>
 
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-        <div 
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ 
-            backgroundImage: `url(${heroImage})`,
-          }}
-        />
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-chart-2/20 to-chart-3/20" />
         <div className="absolute inset-0 bg-gradient-to-b from-background/95 via-background/85 to-background/95" />
-        
+
         <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 py-32 text-center">
           <div className="space-y-8">
             <h1 className="text-5xl md:text-7xl font-heading font-bold tracking-tight text-foreground">
@@ -67,9 +62,9 @@ export default function Home() {
                 </Button>
               </Link>
               <a href="#features">
-                <Button 
-                  size="lg" 
-                  variant="outline" 
+                <Button
+                  size="lg"
+                  variant="outline"
                   className="text-lg px-8 backdrop-blur-md bg-background/40"
                   data-testid="button-hero-learn"
                 >
@@ -109,12 +104,8 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <Card className="relative overflow-hidden border-2 hover-elevate transition-all duration-300" data-testid="card-feature-sync">
               <CardContent className="p-8 space-y-4">
-                <div className="relative h-24 w-24 mx-auto">
-                  <img 
-                    src={syncIcon} 
-                    alt="Auto Sync" 
-                    className="w-full h-full object-contain"
-                  />
+                <div className="relative h-24 w-24 mx-auto flex items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-chart-2/20">
+                  <Cloud className="w-12 h-12 text-primary" />
                 </div>
                 <h3 className="text-2xl font-heading font-semibold text-center">
                   Auto-Sync Magic
@@ -127,12 +118,8 @@ export default function Home() {
 
             <Card className="relative overflow-hidden border-2 hover-elevate transition-all duration-300" data-testid="card-feature-security">
               <CardContent className="p-8 space-y-4">
-                <div className="relative h-24 w-24 mx-auto">
-                  <img 
-                    src={securityIcon} 
-                    alt="Security" 
-                    className="w-full h-full object-contain"
-                  />
+                <div className="relative h-24 w-24 mx-auto flex items-center justify-center rounded-2xl bg-gradient-to-br from-chart-2/20 to-chart-3/20">
+                  <Shield className="w-12 h-12 text-primary" />
                 </div>
                 <h3 className="text-2xl font-heading font-semibold text-center">
                   Military-Grade Security
@@ -145,12 +132,8 @@ export default function Home() {
 
             <Card className="relative overflow-hidden border-2 hover-elevate transition-all duration-300" data-testid="card-feature-speed">
               <CardContent className="p-8 space-y-4">
-                <div className="relative h-24 w-24 mx-auto">
-                  <img 
-                    src={speedIcon} 
-                    alt="Lightning Fast" 
-                    className="w-full h-full object-contain"
-                  />
+                <div className="relative h-24 w-24 mx-auto flex items-center justify-center rounded-2xl bg-gradient-to-br from-chart-3/20 to-primary/20">
+                  <Zap className="w-12 h-12 text-primary" />
                 </div>
                 <h3 className="text-2xl font-heading font-semibold text-center">
                   Lightning Fast

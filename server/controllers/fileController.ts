@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { File } from '../models/File';
 import { User } from '../models/User';
+import { getGlobalStorage } from '../models/GlobalStorage';
 import { uploadToR2, deleteFromR2, getSignedR2Url } from '../services/storageService';
 import sharp from 'sharp';
 
@@ -33,12 +34,13 @@ export const uploadFiles = async (req: Request, res: Response): Promise<void> =>
             totalSize += file.size;
         }
 
-        // Check if upload would exceed storage limit
-        if (user.storageUsed + totalSize > user.storageLimit) {
+        // Check against GLOBAL storage limit (9GB total for all users)
+        const globalStorage = await getGlobalStorage();
+        if (globalStorage.totalUsed + totalSize > globalStorage.totalLimit) {
             res.status(413).json({
-                message: 'Storage full! Cannot upload files. You have reached your 9GB storage limit.',
-                storageUsed: user.storageUsed,
-                storageLimit: user.storageLimit,
+                message: 'Global storage full! Cannot upload files. The system has reached its 9GB total storage limit.',
+                globalStorageUsed: globalStorage.totalUsed,
+                globalStorageLimit: globalStorage.totalLimit,
                 requiredSpace: totalSize
             });
             return;
@@ -102,6 +104,12 @@ export const uploadFiles = async (req: Request, res: Response): Promise<void> =>
         }
 
         await user.save();
+
+        // Update global storage
+        const updatedGlobalStorage = await getGlobalStorage();
+        updatedGlobalStorage.totalUsed += totalSize;
+        updatedGlobalStorage.lastUpdated = new Date();
+        await updatedGlobalStorage.save();
 
         res.status(201).json({
             message: `Successfully uploaded ${uploadedFiles.length} file(s)`,
@@ -206,6 +214,12 @@ export const deleteFile = async (req: Request, res: Response): Promise<void> => 
             user.storageUsed = Math.max(0, user.storageUsed - file.size);
             await user.save();
         }
+
+        // Update global storage
+        const globalStorage = await getGlobalStorage();
+        globalStorage.totalUsed = Math.max(0, globalStorage.totalUsed - file.size);
+        globalStorage.lastUpdated = new Date();
+        await globalStorage.save();
 
         // Delete file record
         await File.deleteOne({ _id: file._id });

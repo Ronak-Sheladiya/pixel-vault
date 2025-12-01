@@ -34,8 +34,8 @@ app.use(express.static(distPath));
 
 // Basic API routes for testing
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development'
   });
@@ -51,13 +51,23 @@ app.post('/api/auth/signup', (req, res) => {
 });
 
 app.get('/api/auth/me', (req, res) => {
+  // Return 401 without triggering refresh loop
   res.status(401).json({ message: 'Not authenticated' });
+});
+
+app.post('/api/auth/refresh-token', (req, res) => {
+  // Return 401 to stop the refresh loop
+  res.status(401).json({ message: 'No refresh token available' });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.json({ message: 'Logged out' });
 });
 
 // Serve React app for all other routes (SPA routing)
 app.get('*', (req, res) => {
   const indexPath = path.join(distPath, 'index.html');
-  
+
   if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {

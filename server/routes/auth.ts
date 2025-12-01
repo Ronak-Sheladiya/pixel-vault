@@ -8,6 +8,7 @@ import {
     getCurrentUser,
     forgotPassword,
     resetPassword,
+    getGlobalStorageStats,
 } from '../controllers/authController';
 import { authenticate } from '../middleware/auth';
 
@@ -24,5 +25,6 @@ router.post('/reset-password/:token', resetPassword);
 router.post('/logout', authenticate, logout);
 router.post('/refresh-token', refreshToken);
 router.get('/me', authenticate, getCurrentUser);
+router.get('/storage', authenticate, getGlobalStorageStats);
 
 export default router;

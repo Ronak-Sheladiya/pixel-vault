@@ -1,5 +1,6 @@
 import { Home, Image, Folder, Upload, Settings, Cloud, LogOut } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { useState, useEffect } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -14,6 +15,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import api from "@/lib/api";
 
 const menuItems = [
   {
@@ -45,16 +47,33 @@ const menuItems = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { user, logout } = useAuth();
+  const [globalStorage, setGlobalStorage] = useState({ totalUsed: 0, totalLimit: 9 * 1024 * 1024 * 1024 });
+
+  useEffect(() => {
+    const fetchGlobalStorage = async () => {
+      try {
+        const response = await api.get('/auth/storage');
+        setGlobalStorage(response.data);
+      } catch (error) {
+        console.error('Failed to fetch global storage:', error);
+      }
+    };
+
+    fetchGlobalStorage();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchGlobalStorage, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const formatBytes = (bytes: number) => {
     if (bytes < 1024) return bytes + " B";
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
     if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB";
+    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
   };
 
-  const storageUsed = user?.storageUsed || 0;
-  const storageLimit = user?.storageLimit || 9 * 1024 * 1024 * 1024; // 9GB default
+  const storageUsed = globalStorage.totalUsed;
+  const storageLimit = globalStorage.totalLimit;
   const storagePercent = Math.round((storageUsed / storageLimit) * 100);
 
   const getUserInitials = () => {
@@ -135,12 +154,12 @@ export function AppSidebar() {
       <SidebarFooter>
         <div className="px-6 py-4 space-y-3">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Storage Used</span>
+            <span className="text-muted-foreground">Global Storage</span>
             <span className="font-medium">{formatBytes(storageUsed)} / {formatBytes(storageLimit)}</span>
           </div>
           <Progress value={storagePercent} className="h-2" />
           <p className="text-xs text-muted-foreground">
-            {storagePercent}% of your storage used
+            {storagePercent}% of total storage used (all users)
           </p>
         </div>
       </SidebarFooter>
