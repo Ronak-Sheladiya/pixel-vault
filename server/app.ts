@@ -55,15 +55,16 @@ app.use(cors({
 }));
 
 // Rate limiting (disabled in development for testing)
-if (process.env.NODE_ENV === 'production') {
-  const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // Increased for photo gallery
-    message: 'Too many requests from this IP, please try again later.',
-    validate: { trustProxy: false }, // We handle trust proxy manually
-  });
-  app.use('/api/', limiter);
-}
+// Rate limiting disabled as per user request
+// if (process.env.NODE_ENV === 'production') {
+//   const limiter = rateLimit({
+//     windowMs: 15 * 60 * 1000, // 15 minutes
+//     max: 1000, // Increased for photo gallery
+//     message: 'Too many requests from this IP, please try again later.',
+//     validate: { trustProxy: false }, // We handle trust proxy manually
+//   });
+//   app.use('/api/', limiter);
+// }
 
 // Cookie parser
 app.use(cookieParser());
