@@ -35,19 +35,11 @@ export function log(message: string, source = "express") {
 
 export const app = express();
 
-// Connect to MongoDB
-connectDatabase();
-
-// Trust proxy for Railway deployment (fixes redirect loops)
+// Trust proxy for Railway deployment (fixes redirect loops and rate limiting)
 app.enable('trust proxy');
 
-// Debug middleware to log protocol
-app.use((req, res, next) => {
-  if (process.env.NODE_ENV === 'production') {
-    console.log(`[DEBUG] ${req.method} ${req.url} | Proto: ${req.protocol} | Secure: ${req.secure} | X-Fwd-Proto: ${req.headers['x-forwarded-proto']}`);
-  }
-  next();
-});
+// Connect to MongoDB
+connectDatabase();
 
 // Security middleware
 // Disable CSP in development to allow Vite's inline scripts
@@ -68,6 +60,7 @@ if (process.env.NODE_ENV === 'production') {
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100,
     message: 'Too many requests from this IP, please try again later.',
+    validate: { trustProxy: false }, // We handle trust proxy manually
   });
   app.use('/api/', limiter);
 }
