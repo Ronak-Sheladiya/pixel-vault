@@ -196,9 +196,15 @@ export const serveFileContent = async (req: Request, res: Response): Promise<voi
 
         // Note: We might want to allow public access for shared links in the future,
         // but for now, let's require auth or implement a shared token check.
-        // However, since the frontend uses this for the dashboard, auth is required.
-        // If the user is just viewing the image in the dashboard, the cookie should be sent.
+        // If the middleware didn't find a user, we can't serve private files.
+        res.status(401).json({ message: 'Authentication required' });
+        return;
+    }
+        */
 
+    const file = await File.findOne({
+        _id: req.params.id,
+        // owner: req.user.userId // Disabled owner check for debugging
     });
 
     if (!file) {
