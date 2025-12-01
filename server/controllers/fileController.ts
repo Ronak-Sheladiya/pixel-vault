@@ -199,63 +199,40 @@ export const serveFileContent = async (req: Request, res: Response): Promise<voi
         // However, since the frontend uses this for the dashboard, auth is required.
         // If the user is just viewing the image in the dashboard, the cookie should be sent.
 
-        // For simplicity and to fix the immediate issue, we'll check auth if present,
-        // but we might need to be lenient if the browser doesn't send cookies for <img> tags 
-        // in some cross-site scenarios (though here it's same-site).
+    });
 
-        // Let's enforce auth for now.
-        if (!req.user) {
-            // If no user, check if it's a public share (TODO). 
-            // For now, if no auth, return 401.
-            // BUT: <img> tags might not send Authorization header if it's a bearer token.
-            // If using cookies, it should work.
-            // If using Bearer token in headers, <img> src won't send it.
-            // The current auth middleware checks cookies.
-
-            // If the middleware didn't find a user, we can't serve private files.
-            res.status(401).json({ message: 'Authentication required' });
-            return;
-        }
-
-        const file = await File.findOne({
-            _id: req.params.id,
-            // We should check ownership OR if the file is shared.
-            // For now, check ownership.
-            owner: req.user.userId,
-        });
-
-        if (!file) {
-            res.status(404).json({ message: 'File not found' });
-            return;
-        }
-
-        if (!file.r2Key) {
-            res.status(404).json({ message: 'File content not found' });
-            return;
-        }
-
-        // Get stream from R2
-        const { Body, ContentType, ContentLength } = await getFileStream(file.r2Key);
-
-        // Set headers
-        if (ContentType) res.setHeader('Content-Type', ContentType);
-        if (ContentLength) res.setHeader('Content-Length', ContentLength);
-
-        // Cache control for better performance
-        res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
-
-        // Pipe stream to response
-        if (Body instanceof Readable) {
-            Body.pipe(res);
-        } else {
-            // Fallback if not a stream (e.g. Buffer/Blob/String)
-            res.send(Body);
-        }
-
-    } catch (error) {
-        console.error('Serve file content error:', error);
-        res.status(500).json({ message: 'Failed to serve file content' });
+    if (!file) {
+        res.status(404).json({ message: 'File not found' });
+        return;
     }
+
+    if (!file.r2Key) {
+        res.status(404).json({ message: 'File content not found' });
+        return;
+    }
+
+    // Get stream from R2
+    const { Body, ContentType, ContentLength } = await getFileStream(file.r2Key);
+
+    // Set headers
+    if (ContentType) res.setHeader('Content-Type', ContentType);
+    if (ContentLength) res.setHeader('Content-Length', ContentLength);
+
+    // Cache control for better performance
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
+
+    // Pipe stream to response
+    if (Body instanceof Readable) {
+        Body.pipe(res);
+    } else {
+        // Fallback if not a stream (e.g. Buffer/Blob/String)
+        res.send(Body);
+    }
+
+} catch (error) {
+    console.error('Serve file content error:', error);
+    res.status(500).json({ message: 'Failed to serve file content' });
+}
 };
 
 // Delete File
